@@ -4,10 +4,11 @@ using namespace cv;
 
 #define FLOAT_TO_INT(x) ((x)>=0?(int)((x)+0.5):(int)((x)-0.5))
 
-int procesarImagen(uchar* p, int nRows, int nCols, int channels);
-double valorRGBlineal (double RGBcomprimido);
-double valorYcomprimido (double valorYlineal);
-
+extern "C" {
+    int procesarImagen(unsigned char* p, int nRows, int nCols, int channels);
+    double valorRGBlineal(double RGBcomprimido);
+    double valorYcomprimido(double valorYlineal);
+}
 
 int main (int argc, char** argv) {
 	int resultado;
@@ -50,6 +51,7 @@ int main (int argc, char** argv) {
 	return (0);
 }
 
+/*
 int procesarImagen(uchar* p, int nRows, int nCols, int channels) {
 
 	int i,j;
@@ -107,3 +109,4 @@ double valorYcomprimido (double valorYlineal) {
 	return (resultado);
 }
 
+*/
