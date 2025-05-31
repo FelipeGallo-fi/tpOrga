@@ -1,0 +1,44 @@
+# Directorio de build (binarios, objetos, etc)
+build/
+
+# Archivos de CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Archivos de salida
+*.exe
+*.out
+*.o
+*.obj
+
+# Archivos temporales y de respaldo
+*~
+*.swp
+*.swo
+*.vscode
+
+# Archivos de logs
+*.log
+
+# Archivos de IntelliJ IDEA / JetBrains
+.idea/
+*.iml
+
+# Archivos de sistema (macOS, Linux)
+.DS_Store
+Thumbs.db
+
+# Otros archivos temporales
+*.tmp
+*.temp
+
+# Valgrind log (si usas)
+valgrind.log
+
+# Archivos de prueba o coverage (si usas)
+*.gcda
+*.gcno
+*.gcov
+
