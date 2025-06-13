@@ -167,7 +167,7 @@ valorRGBlineal:
     ; Comparar con el umbral 0.04045
     movsd   xmm1, qword [rel limiteRGB]
     ucomisd xmm0, xmm1
-    jb      caso_linealRGB             ; Si es menor, va al caso lineal
+    jbe      caso_linealRGB     ; Si es menor o igual, va al caso lineal
 
     ; -------------------------------
     ; Caso exponencial:
@@ -195,10 +195,14 @@ valorRGBlineal:
     push    r9
     push    r10
     push    r11
-
-    call    pow                        ; Resultado queda en xmm0
-
-    ; Restaurar registros
+    sub     rsp, 16               ; reservo 16 bytes para xmm6 y xmm7
+    movdqu  [rsp], xmm6
+    movdqu  [rsp + 8], xmm7
+    call    pow                 ; xmm0 = pow(xmm0, 2.4)
+    ; recupero los registros
+    movdqu  xmm6, [rsp]
+    movdqu  xmm7, [rsp + 8]
+    add     rsp, 16
     pop     r11
     pop     r10
     pop     r9
