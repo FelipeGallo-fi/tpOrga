@@ -7,269 +7,181 @@ global valorRGBlineal
 global valorYcomprimido
 
 section .data
-    escalar      dq 12.92
-    multiplicador_gamma    dq 1.055
-    offset_gamma  dq 0.055
-    limiteRGB     dq 0.04045
-    exponente_gammaRGB dq 2.4
-    limiteY        dq 0.0031308
-    exponente_gammaY     dq 0.4166666666666667     ; 1 / 2.4
-    const_R dq 0.2126
-    const_G dq 0.7152
-    const_B dq 0.0722
-    division_factor dq 255.0
-
+    escalar               dq 12.92
+    multiplicador_gamma   dq 1.055
+    offset_gamma          dq 0.055
+    limiteRGB             dq 0.04045
+    exponente_gammaRGB    dq 2.4
+    limiteY               dq 0.0031308
+    exponente_gammaY      dq 0.4166666666666667     ; 1 / 2.4
+    const_R               dq 0.2126
+    const_G               dq 0.7152
+    const_B               dq 0.0722
+    division_factor       dq 255.0
 
 section .text
+
 ; ---------------------------------------------------------------------
 ; int procesarImagen(unsigned char* p, int nRows, int nCols, int channels);
-; Retorna: eax = 0
+; Entrada:
+;   rdi = puntero al buffer de imagen (unsigned char*)
+;   rsi = nRows (cantidad de filas)
+;   rdx = nCols (cantidad de columnas)
+;   rcx = channels (cantidad de canales, asumido 3)
+; Salida:
+;   eax = 0 (retorno entero)
 ;
-; int procesarImagen(uchar* p, int nRows, int nCols, int channels) {
-;
-;	int i,j;
-;	double valorR, valorG, valorB; // valores RGB en rango 0..1
-;	double Rlineal, Glineal, Blineal; // El array esta ordenado como BGR
-;	double Ylineal, Yrgb;
-;
-;	for (i=0; i < nRows; i++) {
-;		for (j=0; j < nCols*channels; j+=3) {
-;			// B
-;			valorB = (((double)(*(p+j+i*nCols*channels)))/255.0);
-;			Blineal = valorRGBlineal (valorB);
-;			// G
-;			valorG = (((double)(*(p+j+i*nCols*channels+1)))/255.0);
-;			Glineal = valorRGBlineal (valorG);
-;			// R
-;			valorR = (((double)(*(p+j+i*nCols*channels+2)))/255.0);
-;			Rlineal = valorRGBlineal (valorR);
-;			// Y lineal
-;			Ylineal = 0.2126*Rlineal + 0.7152*Glineal + 0.0722*Blineal;
-;			// Y comprimido
-;			Yrgb = 255 * valorYcomprimido (Ylineal);
-;			// RGB grayscale
-;			*(p+j+i*nCols*channels) = FLOAT_TO_INT((Yrgb));
-;			*(p+j+i*nCols*channels+1) = FLOAT_TO_INT((Yrgb));
-;			*(p+j+i*nCols*channels+2) = FLOAT_TO_INT((Yrgb));
-;		}
-;	}
-;	return (0);
-;}
+; Descripción:
+;   Convierte una imagen RGB en tonos de gris, manteniendo formato RGB
+;   Se calcula luminancia perceptual con corrección gamma:
+;     - Linealización de R, G, B con valorRGBlineal
+;     - Luminancia Y = 0.2126*R + 0.7152*G + 0.0722*B
+;     - Compresión gamma de Y con valorYcomprimido
+;     - El resultado se aplica a los tres canales (R=G=B)
 ; ---------------------------------------------------------------------
 procesarImagen:
-    ; Entrada: rdi = p (puntero a la imagen) unsigned char*
-    ;          rsi = nRows
-    ;          rdx = nCols
-    ;          rcx = channels
-    ; Salida: eax = 0
-    ; Guardo el rdi en un registro ya que pow le asigna el valor 0x0
-    mov     r12, rdi
-    ; Guardo todos los parametros de entrada en registros
-    mov     r13, rsi             ; nRows
-    mov     r14, rdx             ; nCols
-    mov     r15, rcx             ; channels (asumimos 3 para RGB)
-    ; Inicializo otros registros en 0 con carga inmediata
-    mov     r8, 0              ; i = 0 (fila)
-    mov     r10, 0             ; r10 = índice
-    mov     r11, 0             ; r11 = valor para RGB
+    mov     r12, rdi         ; puntero a imagen
+    mov     r13, rsi         ; nRows
+    mov     r14, rdx         ; nCols
+    mov     r15, rcx         ; channels (3)
 
+    mov     r8, 0            ; fila i
 procesar_filas:
     cmp     r8, r13
     jge     fin_procesar
-    mov     r9, 0              ; j = 0 (reiniciar columna)
+    mov     r9, 0            ; columna j
 
 procesar_columnas:
     mov     rax, r14
-    imul    rax, r15              ; rax = nCols * channels
+    imul    rax, r15         ; ancho total en bytes (nCols * channels)
     cmp     r9, rax
     jge     siguiente_fila
 
-    ; índice = i * nCols * channels + j
+    ; índice lineal: idx = i * nCols * channels + j
     mov     r10, r8
     imul    r10, r14
     imul    r10, r15
     add     r10, r9
 
-    ; Leer B
-    movzx   r11, byte [r12 + r10]       ; B
+    ; --- Canal B ---
+    movzx   r11, byte [r12 + r10]
     cvtsi2sd xmm0, r11
-    divsd   xmm0, qword [rel division_factor]            ; xmm0 = B / 255.0
-    call    valorRGBlineal               ; xmm0 = Blineal
+    divsd   xmm0, qword [rel division_factor]   ; B / 255.0
+    call    valorRGBlineal
+    movsd   xmm6, xmm0         ; Blineal
 
-    ; Guardar Blineal en xmm6
-    movsd  xmm6, xmm0
-
-    ; Leer G
+    ; --- Canal G ---
     movzx   r11, byte [r12 + r10 + 1]
     cvtsi2sd xmm0, r11
     divsd   xmm0, qword [rel division_factor]
-    call    valorRGBlineal               ; xmm0 = Glineal
+    call    valorRGBlineal
+    movsd   xmm7, xmm0         ; Glineal
 
-    ; Guardar Glineal en xmm7
-    movsd  xmm7, xmm0
-
-    ; Leer R
+    ; --- Canal R ---
     movzx   r11, byte [r12 + r10 + 2]
     cvtsi2sd xmm0, r11
-    divsd   xmm0, qword [rel division_factor] ; xmm0 = R / 255.0
-    call    valorRGBlineal               ; xmm0 = Rlineal
+    divsd   xmm0, qword [rel division_factor]
+    call    valorRGBlineal     ; xmm0 = Rlineal
 
-    ; Calcular Ylineal = 0.2126*R + 0.7152*G + 0.0722*B
-    movsd   xmm1, xmm0                 ; xmm1 = Rlineal
-    mulsd   xmm1, qword [rel const_R]  ; Rlineal * 0.2126
-    movsd   xmm0, xmm6                 ; xmm0 = Blineal
-    mulsd   xmm0, qword [rel const_B]  ; Blineal * 0.0722
-    addsd   xmm0, xmm1                 ; xmm0 = Rlineal * 0.2126 + Blineal * 0.0722
-    movsd   xmm1, xmm7                 ; xmm1 = Glineal
-    mulsd   xmm1, qword [rel const_G]  ; Glineal * 0.7152
-    addsd   xmm0, xmm1                 ; xmm0 = Ylineal = Rlineal * 0.2126 + Glineal * 0.7152 + Blineal * 0.0722
+    ; Ylineal = 0.2126*R + 0.7152*G + 0.0722*B
+    movsd   xmm1, xmm0
+    mulsd   xmm1, qword [rel const_R]
+    movsd   xmm0, xmm6
+    mulsd   xmm0, qword [rel const_B]
+    addsd   xmm0, xmm1
+    movsd   xmm1, xmm7
+    mulsd   xmm1, qword [rel const_G]
+    addsd   xmm0, xmm1         ; xmm0 = Ylineal
 
-    ; Calcular Y comprimido
-    call    valorYcomprimido           ; xmm0 = Y comprimido
-
-    ; Convertir Y a byte [0..255]
+    ; Yrgb = 255 * valorYcomprimido(Ylineal)
+    call    valorYcomprimido
     movsd   xmm1, qword [rel division_factor]
-    mulsd   xmm0, xmm1         ; xmm0 = Yrgb (en rango 0..255) es decir Ycomprimido * 255.0
-    cvttsd2si r11, xmm0               ; r11 = Yrgb (convertido a entero)
-    
+    mulsd   xmm0, xmm1
+    cvttsd2si r11, xmm0
+
+    ; Asignar Yrgb a canales R, G y B
     mov byte [r12 + r10], r11b
     mov byte [r12 + r10 + 1], r11b
     mov byte [r12 + r10 + 2], r11b
 
-    add     r9, r15                 ; j += channels (3)
+    add     r9, r15
     jmp     procesar_columnas
 
 siguiente_fila:
-    add     r8, 1                         ; i += 1
+    inc     r8
     jmp     procesar_filas
 
 fin_procesar:
     xor     eax, eax
     ret
+
 ; ---------------------------------------------------------------------
-
-; double valorRGBlineal(double RGBcomprimido)
-; Entrada: xmm0 = RGBcomprimido
-; Salida:  xmm0 = resultado
-; Descripción:
-; Esta función calcula el valor lineal de cada un pixel RGB.
-; Si el valor es menor que el límite (0.04045), se aplica una escala lineal.
-; En caso contrario, se utiliza una transformación exponencial con gamma.
-; La transformación incluye una llamada a la función pow y operaciones
-; adicionales para ajustar el resultado según la fórmula especificada.
-
-; double valorRGBlineal (double RGBcomprimido) {
-; 	double resultado;
-; 	double a,b;
-; 	if (isless(RGBcomprimido,0.04045)) {
-; 		resultado = RGBcomprimido / 12.92;
-; 	} else {
-; 		a = (RGBcomprimido+0.055);
-; 		b = (a/1.055);
-; 		resultado = pow(b,(2.4));
-; 	}
-; 	return (resultado);
-; }
-
+; double valorRGBlineal (double RGBcomprimido)
+; Entrada : xmm0 = valor RGB normalizado (0..1)
+; Salida  : xmm0 = valor linealizado
+;
+; Si RGB < 0.04045:   RGB / 12.92
+; Si RGB >= 0.04045:  pow((RGB + 0.055)/1.055, 2.4)
 ; ---------------------------------------------------------------------
 valorRGBlineal:
-    ; Comparar con 0.04045
     movsd   xmm1, qword [rel limiteRGB]
-    ucomisd xmm0, xmm1         ; if (xmm0 < limite)
+    ucomisd xmm0, xmm1
     jb      caso_linealRGB
 
     ; caso exponencial
+    movsd   xmm1, qword [rel offset_gamma]
+    addsd   xmm0, xmm1
+    movsd   xmm1, qword [rel multiplicador_gamma]
+    divsd   xmm0, xmm1
+    movsd   xmm1, qword [rel exponente_gammaRGB]
 
-    ; armar argumentos para pow((RGBcomprimido + 0.055) / 1.055, 2.4)
-    movsd   xmm1, qword [rel offset_gamma]  ; xmm1 = 0.055
-    addsd   xmm0, xmm1         ; xmm0 += 0.055
-
-    movsd   xmm1, qword [rel multiplicador_gamma]  ; xmm1 = 1.055
-    divsd   xmm0, xmm1         ; xmm0 /= 1.055
-    
-    movsd   xmm1, qword [rel exponente_gammaRGB]  ; xmm1 = 2.4
-    push    r8 
-    push    r9
-    push    r10
-    push    r11
-    ; preservo el estado de los registros
-    call    pow                 ; xmm0 = pow(xmm0, 2.4)
-    ; recupero los registros
-    pop     r11
-    pop     r10
-    pop     r9
-    pop     r8
-
+    sub     rsp, 16
+    movsd   qword [rsp], xmm0
+    movsd   qword [rsp + 8], xmm1
+    push    r8 r9 r10 r11
+    call    pow
+    pop     r11 r10 r9 r8
+    add     rsp, 16
     ret
 
 caso_linealRGB:
-    ; xmm0 /= 12.92
     movsd   xmm1, qword [rel escalar]
     divsd   xmm0, xmm1
     ret
 
 ; ---------------------------------------------------------------------
-
-;double valorYcomprimido (double valorYlineal) {
-;	double resultado;
-;	double a, b;
-;	if (isless(valorYlineal,0.0031308)) {
-;		resultado = valorYlineal * 12.92;
-;	} else {
-;		a = pow(valorYlineal,(1/2.4));
-;		b = 1.055 * a;
-;		resultado =  b - 0.055;
-;	}
-;	return (resultado);
-;}
+; double valorYcomprimido (double valorYlineal)
+; Entrada : xmm0 = Y lineal (0..1)
+; Salida  : xmm0 = Y comprimido (0..1)
 ;
-; double valorYcomprimido(double valorYlineal)
-; Entrada: xmm0 = valorYlineal
-; Salida:  xmm0 = resultado
-; Descripción:
-; Esta función calcula el valor comprimido de Y a partir de su valor lineal.
-; Si el valor es menor que el límite (0.0031308), se aplica una escala lineal.
-; En caso contrario, se utiliza una transformación exponencial con gamma.
-; La transformación incluye una llamada a la función pow y operaciones
-; adicionales para ajustar el resultado según la fórmula especificada.
+; Si Y < 0.0031308:      Y * 12.92
+; Si Y >= 0.0031308:     1.055 * pow(Y, 1/2.4) - 0.055
 ; ---------------------------------------------------------------------
 valorYcomprimido:
-    ; Comparar con 0.0031308
     movsd   xmm1, qword [rel limiteY]
-    ucomisd xmm0, xmm1         ; if (xmm0 < limite)
+    ucomisd xmm0, xmm1
     jb      caso_linealY
 
-    ;caso exponencial
-    sub     rsp, 16            ; reservar 16 bytes para pasar los argumentos a pow
-
-    ; armar argumentos para pow(valorYlineal, 1/2.4)
-    movsd   qword [rsp], xmm0                  ; x
+    ; caso exponencial
+    sub     rsp, 16
+    movsd   qword [rsp], xmm0
     movsd   xmm1, qword [rel exponente_gammaY]
-    movsd   qword [rsp + 8], xmm1              ; y
-    push    r8
-    push    r9
-    push    r10
-    push    r11
-    call    pow                 ; xmm0 = pow(valorYlineal, 1/2.4)
-    pop     r11
-    pop     r10
-    pop     r9
-    pop     r8
-    add     rsp, 16            ; vacio pila
+    movsd   qword [rsp + 8], xmm1
+    push    r8 r9 r10 r11
+    call    pow
+    pop     r11 r10 r9 r8
+    add     rsp, 16
 
-    ; xmm0 = resultado de pow(valorYlineal, 1/2.4)
-    ; multiplicar por 1.055
+    ; * 1.055
     movsd   xmm1, qword [rel multiplicador_gamma]
-    mulsd   xmm0, xmm1         ; xmm0 *= 1.055
+    mulsd   xmm0, xmm1
 
-    ; restar 0.055
+    ; - 0.055
     movsd   xmm1, qword [rel offset_gamma]
-    subsd   xmm0, xmm1         ; xmm0 -= 0.055
-
+    subsd   xmm0, xmm1
     ret
 
 caso_linealY:
-    ; xmm0 *= 12.92
     movsd   xmm1, qword [rel escalar]
     mulsd   xmm0, xmm1
     ret
