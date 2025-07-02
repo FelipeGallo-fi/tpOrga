@@ -146,7 +146,10 @@ valorRGBlineal:
     movsd   qword [rsp + 8], xmm1
 
     ; Guardar registros y xmm6/7 (caller-saved)
-    push    r8 r9 r10 r11
+    push    r8 
+    push r9 
+    push r10 
+    push r11
     sub     rsp, 16
     movdqu  [rsp], xmm6
     movdqu  [rsp + 8], xmm7
@@ -154,7 +157,11 @@ valorRGBlineal:
     movdqu  xmm6, [rsp]
     movdqu  xmm7, [rsp + 8]
     add     rsp, 16
-    pop     r11 r10 r9 r8
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+
     add     rsp, 16
     ret
 
@@ -181,9 +188,15 @@ valorYcomprimido:
     movsd   qword [rsp], xmm0
     movsd   xmm1, qword [rel exponente_gammaY]
     movsd   qword [rsp + 8], xmm1
-    push    r8 r9 r10 r11
+    push    r8
+    push r9 
+    push r10 
+    push r11
     call    pow
-    pop     r11 r10 r9 r8
+    pop r11
+    pop r10
+    pop r9
+    pop r8
     add     rsp, 16
 
     movsd   xmm1, qword [rel multiplicador_gamma] ; multiplicar por 1.055
